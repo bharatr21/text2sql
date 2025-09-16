@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "D:\\Courses\\MSCS\\Repos\\norp-llm\\"
+    ],
+    "allow": [
+      "Bash(mkdir:*)"
+    ]
+  }
+}
