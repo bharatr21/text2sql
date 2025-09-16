@@ -183,7 +183,7 @@ class SQLAgent(LoggerMixin):
         return state
 
     async def _save_history(self, state: SQLAgentState) -> SQLAgentState:
-        """Save the conversation to history."""
+        """Save the conversation to history and check for summarization."""
         self.logger.info("Saving conversation history", session_id=state["session_id"])
 
         try:
@@ -197,6 +197,17 @@ class SQLAgent(LoggerMixin):
                 await self.session_service.add_message(
                     state["session_id"], "ai", state["sql_query"]
                 )
+
+            # Check if we need to summarize the conversation
+            if await self.session_service.should_summarize(state["session_id"]):
+                self.logger.info("Triggering auto-summarization", session_id=state["session_id"])
+                summarization_success = await self.session_service.auto_summarize_and_trim(
+                    state["session_id"]
+                )
+                if summarization_success:
+                    self.logger.info("Auto-summarization completed", session_id=state["session_id"])
+                else:
+                    self.logger.warning("Auto-summarization failed", session_id=state["session_id"])
 
         except Exception as e:
             self.logger.error("Failed to save history", error=str(e))

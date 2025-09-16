@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ..agents.sql_agent import SQLAgent
+from ..agents.summarization_agent import SummarizationAgent
 from ..core.config import Settings, settings
 from ..core.logging import configure_logging, get_logger
 from ..models.schemas import (
@@ -27,6 +28,7 @@ database_service: DatabaseService = None
 llm_service: LLMService = None
 redis_service: RedisService = None
 session_service: SessionService = None
+summarization_agent: SummarizationAgent = None
 sql_agent: SQLAgent = None
 
 logger = get_logger(__name__)
@@ -35,7 +37,7 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global database_service, llm_service, redis_service, session_service, sql_agent
+    global database_service, llm_service, redis_service, session_service, summarization_agent, sql_agent
 
     logger.info("Starting Text2SQL application")
 
@@ -44,7 +46,17 @@ async def lifespan(app: FastAPI):
         database_service = DatabaseService(settings.database)
         llm_service = LLMService(settings.llm)
         redis_service = RedisService(settings.redis)
-        session_service = SessionService(redis_service, settings.app)
+
+        # Initialize summarization agent
+        summarization_agent = SummarizationAgent(llm_service)
+
+        # Initialize session service with summarization agent
+        session_service = SessionService(
+            redis_service,
+            settings.app,
+            summarization_agent=summarization_agent,
+            keep_recent_messages=settings.app.keep_recent_messages
+        )
 
         # Initialize SQL agent
         sql_agent = SQLAgent(

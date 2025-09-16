@@ -13,11 +13,13 @@ from .redis_service import RedisService
 
 
 class SessionService(LoggerMixin):
-    """Session management service."""
+    """Session management service with automatic conversation summarization."""
 
-    def __init__(self, redis_service: RedisService, app_settings: AppSettings):
+    def __init__(self, redis_service: RedisService, app_settings: AppSettings, summarization_agent=None, keep_recent_messages: int = 10):
         self.redis_service = redis_service
         self.app_settings = app_settings
+        self.summarization_agent = summarization_agent
+        self.keep_recent_messages = keep_recent_messages
 
     def _get_session_key(self, session_id: str) -> str:
         """Get Redis key for session messages."""
@@ -30,6 +32,10 @@ class SessionService(LoggerMixin):
     def _get_system_key(self, session_id: str) -> str:
         """Get Redis key for system messages."""
         return f"session:{session_id}:system"
+
+    def _get_summary_key(self, session_id: str) -> str:
+        """Get Redis key for conversation summary."""
+        return f"session:{session_id}:summary"
 
     async def create_session(self, session_id: str) -> bool:
         """Create a new session."""
@@ -133,14 +139,67 @@ class SessionService(LoggerMixin):
         count = await self.get_message_count(session_id)
         return count >= self.app_settings.max_history_messages
 
+    async def auto_summarize_and_trim(
+        self,
+        session_id: str,
+        keep_recent: Optional[int] = None,
+    ) -> bool:
+        """Automatically summarize conversation using LLM and trim old messages."""
+        if not self.summarization_agent:
+            self.logger.warning("No summarization agent available", session_id=session_id)
+            return False
+
+        # Use instance default if not specified
+        keep_recent = keep_recent or self.keep_recent_messages
+
+        self.logger.info("Auto-summarizing conversation", session_id=session_id, keep_recent=keep_recent)
+
+        try:
+            # Get current conversation history
+            messages = await self.get_history(session_id, include_system=False)
+
+            # Get existing summary if any
+            existing_summary = await self.get_conversation_summary(session_id)
+
+            # Generate new summary using the summarization agent
+            result = await self.summarization_agent.summarize_conversation(
+                messages=messages,
+                session_id=session_id,
+                existing_summary=existing_summary
+            )
+
+            if not result["success"]:
+                self.logger.error("Failed to generate summary", session_id=session_id, error=result["error"])
+                return False
+
+            # Store the new summary
+            await self.save_conversation_summary(session_id, result["summary"])
+
+            # Add summary as system message for context
+            await self.add_message(session_id, "system", f"Previous conversation summary: {result['summary']}")
+
+            # Keep only recent messages
+            session_key = self._get_session_key(session_id)
+            await self.redis_service.ltrim(session_key, -keep_recent, -1)
+
+            self.logger.info("Conversation auto-summarized successfully", session_id=session_id, messages_kept=keep_recent)
+            return True
+
+        except Exception as e:
+            self.logger.error("Failed to auto-summarize conversation", session_id=session_id, error=str(e))
+            return False
+
     async def summarize_and_trim(
         self,
         session_id: str,
         summary: str,
-        keep_recent: int = 5,
+        keep_recent: Optional[int] = None,
     ) -> bool:
-        """Summarize conversation and trim old messages."""
-        self.logger.info("Summarizing conversation", session_id=session_id)
+        """Summarize conversation and trim old messages (manual summary)."""
+        # Use instance default if not specified
+        keep_recent = keep_recent or self.keep_recent_messages
+
+        self.logger.info("Summarizing conversation", session_id=session_id, keep_recent=keep_recent)
 
         # Add summary as system message
         await self.add_message(session_id, "system", f"Previous conversation summary: {summary}")
@@ -149,6 +208,17 @@ class SessionService(LoggerMixin):
         session_key = self._get_session_key(session_id)
         await self.redis_service.ltrim(session_key, -keep_recent, -1)
 
+        return True
+
+    async def get_conversation_summary(self, session_id: str) -> Optional[str]:
+        """Get the current conversation summary."""
+        summary_key = self._get_summary_key(session_id)
+        return await self.redis_service.get(summary_key)
+
+    async def save_conversation_summary(self, session_id: str, summary: str) -> bool:
+        """Save the conversation summary."""
+        summary_key = self._get_summary_key(session_id)
+        await self.redis_service.set(summary_key, summary, ex=self.app_settings.session_ttl)
         return True
 
     async def clear_session(self, session_id: str) -> bool:

@@ -95,6 +95,7 @@ class AppSettings(BaseSettings):
     # Session management
     session_ttl: int = Field(86400, description="Session TTL in seconds (24 hours)")
     max_history_messages: int = Field(20, description="Maximum messages before summarization")
+    keep_recent_messages: int = Field(10, description="Number of recent messages to keep after summarization")
 
     # SQL generation
     max_sql_rows: int = Field(100, description="Maximum rows to return from SQL queries")

@@ -5,13 +5,14 @@
 [![LangChain](https://img.shields.io/badge/LangChain-0.2+-purple.svg)](https://langchain.com/)
 [![uv](https://img.shields.io/badge/uv-managed-orange.svg)](https://github.com/astral-sh/uv)
 
-A modern, production-ready Text-to-SQL system built with **LangChain**, **LangGraph**, and **FastAPI**. Convert natural language questions into SQL queries and execute them against your database with conversational context and session management.
+A modern, production-ready Text-to-SQL system built with **LangChain**, **LangGraph**, and **FastAPI**. Designed for social science research with NORP (https://norpanel.org/) datasets including crime, homelessness, population, and economic data. Convert natural language questions into SQL queries with conversational context and session management.
 
 ## ✨ Features
 
 - 🤖 **LangGraph-powered SQL Agent** - Intelligent workflow for reliable SQL generation
 - 🚀 **Async-First Architecture** - Built for performance with async/await throughout
 - 🗃️ **SQLite Integration** - Lightweight, fast database operations with aiosqlite
+- 📊 **NORP Social Science Data** - Pre-loaded with US shootings, NYC crime, homelessness, economic, and population datasets
 - 💬 **Conversational Interface** - Maintains context across questions with Redis sessions
 - 🔌 **Multi-LLM Support** - Works with OpenAI, Anthropic, and Together AI
 - 🛡️ **Type Safety** - Full type hints and Pydantic validation
@@ -65,11 +66,14 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-### Create Sample Database
+### Create NORP Sample Database
 
 ```bash
-# Create a sample SQLite database with demo data
+# Create a sample SQLite database with NORP social science data
 uv run text2sql create-db --db-path data/sample.db
+
+# View available sample questions
+uv run text2sql sample-questions
 ```
 
 ### Start the Server
@@ -90,7 +94,10 @@ The API will be available at `http://localhost:8000` with interactive docs at `h
 
 ```bash
 # Send a query via CLI
-uv run text2sql query --question "How many employees are in Engineering?"
+uv run text2sql query --question "How many shooting incidents occurred in New York?"
+
+# View sample questions
+uv run text2sql sample-questions --limit 5
 
 # Check system health
 uv run text2sql health
@@ -109,7 +116,7 @@ uv run text2sql sessions --session-id your-session-id
 curl -X POST "http://localhost:8000/query" \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "Show me all employees with salary greater than 100000",
+    "question": "Which state had the highest number of victims killed in shootings?",
     "session_id": "user-123",
     "message_type": "human"
   }'
@@ -123,7 +130,7 @@ async with httpx.AsyncClient() as client:
     response = await client.post(
         "http://localhost:8000/query",
         json={
-            "question": "What is the average salary by department?",
+            "question": "What is the number of individuals experiencing homelessness in California?",
             "session_id": "user-123",
             "message_type": "human"
         }
@@ -133,14 +140,28 @@ async with httpx.AsyncClient() as client:
 
 ### Sample Questions
 
-Try these questions with the sample database:
+Try these questions with the NORP sample database:
 
-- "How many employees are there?"
-- "What is the average salary by department?"
-- "Show me all projects that are in progress"
-- "Who are the employees in Engineering?"
-- "What is the total budget for all departments?"
-- "Which projects have a budget over 500000?"
+**Population & Demographics:**
+- "What was the population of California in 2020?"
+- "Which state had the highest population in 2020?"
+- "What is the population of Los Angeles County?"
+
+**Crime & Public Safety:**
+- "How many shooting incidents occurred in New York?"
+- "Which state had the highest number of victims killed in shootings?"
+- "Get all criminal records from NYC where the crime classification is 'Felony'"
+- "How many incidents of Assault occurred in Manhattan?"
+
+**Social Issues:**
+- "What is the number of individuals experiencing homelessness in California?"
+- "Which counties have the highest poverty rates?"
+- "List the top 5 locations with the highest number of homeless individuals"
+
+**Correlational Analysis:**
+- "Compare the population of New York and Texas over the last three census years"
+- "Get the number of shooting incidents per 1 million residents in each state"
+- "Which areas with high homelessness rates also have high crime rates?"
 
 ## 🏗️ Architecture
 
@@ -208,6 +229,19 @@ uv run ruff format src/ tests/
 2. Add provider configuration to `LLMSettings`
 3. Implement provider initialization in `LLMService._create_*_llm()`
 4. Update tests and documentation
+
+### NORP Dataset Information
+
+The system includes comprehensive social science datasets from NORP:
+
+**Available Tables:**
+- `us_shootings` - Gun violence incidents across the US with casualty data
+- `nyc_crime_data` - New York City crime incidents with classifications and locations
+- `homelessness_demographics` - Homelessness counts by state, year, and age group
+- `economic_income_and_benefits` - Household income data by zipcode and year
+- `us_population` - State population data from US Census
+- `us_population_county` - County-level population data
+- `food_access` - Food security and access metrics by census tract
 
 ### Database Support
 
