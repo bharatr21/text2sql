@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -20,8 +20,7 @@ class DatabaseSettings(BaseSettings):
     pool_recycle: int = Field(3600, description="Pool recycle time in seconds")
     echo: bool = Field(False, description="Enable SQL echo for debugging")
 
-    class Config:
-        env_prefix = "DB_"
+    model_config = ConfigDict(env_prefix="DB_")
 
 
 class RedisSettings(BaseSettings):
@@ -37,8 +36,7 @@ class RedisSettings(BaseSettings):
     retry_on_timeout: bool = Field(True, description="Retry on timeout")
     max_connections: int = Field(20, description="Maximum connections in pool")
 
-    class Config:
-        env_prefix = "REDIS_"
+    model_config = ConfigDict(env_prefix="REDIS_")
 
 
 class LLMSettings(BaseSettings):
@@ -54,16 +52,16 @@ class LLMSettings(BaseSettings):
     max_retries: int = Field(3, description="Maximum retries")
     api_key: Optional[str] = Field(None, description="API key")
 
-    class Config:
-        env_prefix = "LLM_"
+    model_config = ConfigDict(env_prefix="LLM_")
 
-    @validator("api_key", pre=True, always=True)
-    def get_api_key(cls, v, values):
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def get_api_key(cls, v, info):
         """Get API key from environment or file."""
         if v is not None:
             return v
 
-        provider = values.get("provider", "openai")
+        provider = info.data.get("provider", "openai") if info.data else "openai"
 
         # Try environment variable first
         env_key = f"{provider.upper()}_API_KEY"
@@ -107,8 +105,7 @@ class AppSettings(BaseSettings):
     port: int = Field(8000, description="API port")
     reload: bool = Field(False, description="Auto-reload on code changes")
 
-    class Config:
-        env_prefix = "APP_"
+    model_config = ConfigDict(env_prefix="APP_")
 
 
 class Settings(BaseSettings):
@@ -119,10 +116,11 @@ class Settings(BaseSettings):
     redis: RedisSettings = Field(default_factory=RedisSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False
+    )
 
 
 # Global settings instance

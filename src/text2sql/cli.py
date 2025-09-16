@@ -13,7 +13,7 @@ import uvicorn
 from .core.app import create_app
 from .core.config import Settings, settings
 from .core.logging import configure_logging, get_logger
-from .utils.db_utils import create_sample_database
+from .utils.db_utils import create_sample_database, get_sample_questions
 
 
 @click.group()
@@ -88,13 +88,39 @@ def create_db(db_path: str, force: bool):
 
     try:
         db_url = create_sample_database(db_path)
-        logger.info("Sample database created", path=db_path, url=db_url)
-        click.echo(f"✅ Sample database created at: {db_path}")
+        logger.info("NORP sample database created", path=db_path, url=db_url)
+        click.echo(f"✅ NORP sample database created at: {db_path}")
         click.echo(f"Database URL: {db_url}")
+        click.echo(f"📊 Database includes: US Shootings, NYC Crime, Homelessness, Economic Data, Population, Food Access")
     except Exception as e:
         logger.error("Failed to create database", error=str(e))
         click.echo(f"❌ Failed to create database: {e}")
         sys.exit(1)
+
+
+@main.command()
+@click.option("--limit", default=10, help="Number of sample questions to show")
+def sample_questions(limit: int):
+    """Show sample questions for the NORP datasets."""
+    logger = get_logger(__name__)
+
+    try:
+        questions = get_sample_questions()
+
+        click.echo("📝 Sample Questions for NORP Social Science Datasets:")
+        click.echo("=" * 60)
+
+        for i, question in enumerate(questions[:limit], 1):
+            click.echo(f"{i:2d}. {question}")
+
+        if len(questions) > limit:
+            click.echo(f"\n... and {len(questions) - limit} more questions available")
+
+        click.echo(f"\n💡 Try these with: uv run text2sql query --question \"[question]\"")
+
+    except Exception as e:
+        logger.error("Failed to load sample questions", error=str(e))
+        click.echo(f"❌ Failed to load sample questions: {e}")
 
 
 @main.command()
